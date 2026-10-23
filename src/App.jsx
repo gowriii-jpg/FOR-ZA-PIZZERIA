@@ -95,7 +95,7 @@ function App() {
     0
   );
 
-  // Save the customer order in the Supabase database.
+  // Save the customer order in Supabase.
   async function placeOrder() {
     if (orderSubmitting) return;
 
@@ -152,17 +152,47 @@ function App() {
     }
   }
 
-  // IMPORTANT: Restaurant routing belongs here,
-  // outside placeOrder() and before the customer page return.
+  // Restaurant dashboard routing.
   if (
     window.location.pathname.replace(/\/+$/, "") === "/restaurant"
   ) {
     return <RestaurantDashboard />;
   }
 
-  // Customer-facing website starts here.
+  // Customer-facing website.
   return (
     <div>
+      {/* Floating cart button */}
+      {currentPage === "menu" && (
+        <button
+          onClick={() => setCurrentPage("cart")}
+          disabled={cart.length === 0}
+          aria-label={`View cart, ${itemCount} items`}
+          style={{
+            position: "fixed",
+            top: "18px",
+            right: "18px",
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "12px 18px",
+            border: "none",
+            borderRadius: "30px",
+            backgroundColor: "#b72c20",
+            color: "white",
+            fontSize: "15px",
+            fontWeight: "bold",
+            cursor: cart.length === 0 ? "default" : "pointer",
+            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
+            opacity: cart.length === 0 ? 0.85 : 1,
+          }}
+        >
+          🛒 Cart ({itemCount})
+          {itemCount > 0 && <span>₹{total}</span>}
+        </button>
+      )}
+
       <header className="site-header">
         <h1>FOR'ZA PIZZERIA</h1>
         <p>Authentic Neapolitan pizzas, made just for you!</p>
