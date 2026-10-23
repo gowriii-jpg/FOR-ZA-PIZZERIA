@@ -12,6 +12,23 @@ const statuses = [
   "Cancelled",
 ];
 
+// Get a date in India time as YYYY-MM-DD.
+function getIndiaDate(date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const values = {};
+  parts.forEach((part) => {
+    values[part.type] = part.value;
+  });
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function RestaurantDashboard() {
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -20,13 +37,14 @@ function RestaurantDashboard() {
   const [loginError, setLoginError] = useState("");
   const [dashboardError, setDashboardError] = useState("");
   const [orders, setOrders] = useState([]);
+  const [activeTab, setActiveTab] = useState("today");
   const [isStaff, setIsStaff] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
 
-  // Restore an existing login and listen for sign-in/sign-out.
+  // Restore login and listen for sign-in/sign-out.
   useEffect(() => {
     let active = true;
 
@@ -53,7 +71,7 @@ function RestaurantDashboard() {
     };
   }, []);
 
-  // Fetch orders. Database permissions decide what staff can see.
+  // Fetch orders without deleting or changing historical records.
   const loadOrders = useCallback(async () => {
     setLoadingOrders(true);
     setDashboardError("");
@@ -79,6 +97,7 @@ function RestaurantDashboard() {
         .limit(100);
 
       if (error) throw error;
+
       setOrders(data ?? []);
     } catch (error) {
       console.error("Loading orders failed:", error);
@@ -90,7 +109,7 @@ function RestaurantDashboard() {
     }
   }, []);
 
-  // Verify staff access before displaying customer orders.
+  // Verify staff access before showing customer orders.
   useEffect(() => {
     if (!authReady) return;
 
@@ -198,10 +217,27 @@ function RestaurantDashboard() {
   }
 
   function formatPrice(amount) {
-    return "₹" + Number(amount).toLocaleString("en-IN", {
-      maximumFractionDigits: 2,
-    });
+    return (
+      "₹" +
+      Number(amount).toLocaleString("en-IN", {
+        maximumFractionDigits: 2,
+      })
+    );
   }
+
+  // Separate today's orders from older orders using India time.
+  const today = getIndiaDate(new Date());
+
+  const todayOrders = orders.filter(
+    (order) => getIndiaDate(new Date(order.created_at)) === today
+  );
+
+  const previousOrders = orders.filter(
+    (order) => getIndiaDate(new Date(order.created_at)) !== today
+  );
+
+  const displayedOrders =
+    activeTab === "today" ? todayOrders : previousOrders;
 
   if (!authReady) {
     return <main className="restaurant-shell">Loading...</main>;
@@ -287,6 +323,7 @@ function RestaurantDashboard() {
           <h1>FOR'ZA PIZZERIA</h1>
           <p>Restaurant Order Dashboard</p>
         </div>
+
         <button
           className="restaurant-button secondary"
           onClick={handleLogout}
@@ -297,35 +334,49 @@ function RestaurantDashboard() {
 
       <section className="restaurant-stats">
         <div>
-          <span>Total Orders</span>
-          <strong>{orders.length}</strong>
+          <span>Orders Shown</span>
+          <strong>{displayedOrders.length}</strong>
         </div>
+
         <div>
           <span>New Orders</span>
           <strong>
-            {orders.filter((order) => order.status === "New").length}
+            {
+              displayedOrders.filter(
+                (order) => order.status === "New"
+              ).length
+            }
           </strong>
         </div>
+
         <div>
           <span>In Preparation</span>
           <strong>
-            {orders.filter(
-              (order) =>
-                order.status === "Accepted" ||
-                order.status === "Preparing"
-            ).length}
+            {
+              displayedOrders.filter(
+                (order) =>
+                  order.status === "Accepted" ||
+                  order.status === "Preparing"
+              ).length
+            }
           </strong>
         </div>
+
         <div>
           <span>Ready</span>
           <strong>
-            {orders.filter((order) => order.status === "Ready").length}
+            {
+              displayedOrders.filter(
+                (order) => order.status === "Ready"
+              ).length
+            }
           </strong>
         </div>
       </section>
 
       <div className="restaurant-orders-heading">
         <h2>Customer Orders</h2>
+
         <button
           className="restaurant-button"
           onClick={loadOrders}
@@ -334,6 +385,55 @@ function RestaurantDashboard() {
           {loadingOrders ? "Refreshing..." : "Refresh Orders"}
         </button>
       </div>
+
+      {/* Tabs for today's orders and previous orders */}
+      <div
+        role="tablist"
+        aria-label="Order views"
+        style={{
+          display: "flex",
+          gap: "10px",
+          flexWrap: "wrap",
+          margin: "20px 0",
+        }}
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "today"}
+          onClick={() => setActiveTab("today")}
+          className="restaurant-button"
+          style={{
+            backgroundColor:
+              activeTab === "today" ? "#b72c20" : "#eee3dc",
+            color: activeTab === "today" ? "#ffffff" : "#542b24",
+          }}
+        >
+          Today's Orders ({todayOrders.length})
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "history"}
+          onClick={() => setActiveTab("history")}
+          className="restaurant-button"
+          style={{
+            backgroundColor:
+              activeTab === "history" ? "#b72c20" : "#eee3dc",
+            color:
+              activeTab === "history" ? "#ffffff" : "#542b24",
+          }}
+        >
+          Order History ({previousOrders.length})
+        </button>
+      </div>
+
+      <p>
+        {activeTab === "today"
+          ? `Showing orders placed today (${today}, India time).`
+          : "Showing orders from previous dates."}
+      </p>
 
       {dashboardError && (
         <p className="restaurant-error" role="alert">
@@ -345,31 +445,47 @@ function RestaurantDashboard() {
         <p>Loading customer orders...</p>
       )}
 
-      {!loadingOrders && orders.length === 0 && !dashboardError && (
-        <p className="restaurant-empty">
-          No orders yet. New orders will appear here.
-        </p>
-      )}
+      {!loadingOrders &&
+        displayedOrders.length === 0 &&
+        !dashboardError && (
+          <p className="restaurant-empty">
+            {activeTab === "today"
+              ? "No orders today yet. New orders will appear here after you refresh."
+              : "No previous orders found in the loaded order history."}
+          </p>
+        )}
 
       <section className="restaurant-order-list">
-        {orders.map((order) => (
-          <article className="restaurant-order-card" key={order.id}>
+        {displayedOrders.map((order) => (
+          <article
+            className="restaurant-order-card"
+            key={order.id}
+          >
             <div className="restaurant-order-top">
               <div>
                 <h3>Order #{order.id}</h3>
                 <p>
-                  {new Date(order.created_at).toLocaleString("en-IN")}
+                  {new Date(order.created_at).toLocaleString(
+                    "en-IN",
+                    { timeZone: "Asia/Kolkata" }
+                  )}
                 </p>
               </div>
+
               <strong>{formatPrice(order.total)}</strong>
             </div>
 
             <div className="restaurant-customer">
-              <p><strong>Customer:</strong> {order.customer_name}</p>
-              <p><strong>Phone:</strong> {order.customer_phone}</p>
+              <p>
+                <strong>Customer:</strong> {order.customer_name}
+              </p>
+              <p>
+                <strong>Phone:</strong> {order.customer_phone}
+              </p>
             </div>
 
             <h4>Items</h4>
+
             <ul className="restaurant-items">
               {(order.order_items ?? []).map((item) => (
                 <li key={item.id}>
@@ -389,6 +505,7 @@ function RestaurantDashboard() {
               <label htmlFor={`status-${order.id}`}>
                 Update status
               </label>
+
               <select
                 id={`status-${order.id}`}
                 value={order.status}
@@ -403,6 +520,7 @@ function RestaurantDashboard() {
                   </option>
                 ))}
               </select>
+
               {updatingOrderId === order.id && (
                 <span>Saving...</span>
               )}
@@ -410,6 +528,11 @@ function RestaurantDashboard() {
           </article>
         ))}
       </section>
+
+      <p style={{ marginTop: "24px", fontSize: "13px" }}>
+        This view includes up to the latest 100 orders returned by
+        the database. Older orders remain saved in Supabase.
+      </p>
     </main>
   );
 }
